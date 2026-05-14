@@ -37,6 +37,8 @@ jobs:
   merge-and-upload:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: write
 
     steps:
       - name: Install ffmpeg
@@ -100,12 +102,13 @@ jobs:
           FILENAME="pragmatico-${{ inputs.meeting_id }}-${{ inputs.session_date }}.mp4"
           mv merged.mp4 "$FILENAME"
 
-          # Create release with the file (or upload to existing release)
-          gh release create "$TAG" "$FILENAME" \
+          # Create release (ok if it already exists)
+          gh release create "$TAG" \
             --title "Session: ${{ inputs.session_title }} (${{ inputs.session_date }})" \
             --notes "Auto-merged Pragmatico recording" \
-            --repo dancrrza/pragmatico-automations \
-            2>/dev/null || \
+            --repo dancrrza/pragmatico-automations || true
+
+          # Upload file to the release
           gh release upload "$TAG" "$FILENAME" \
             --clobber \
             --repo dancrrza/pragmatico-automations
