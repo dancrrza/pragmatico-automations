@@ -90,9 +90,9 @@ jobs:
           ffmpeg -f concat -safe 0 -i concat_list.txt -c copy merged.mp4
           echo "Merged file size: $(du -sh merged.mp4 | cut -f1)"
 
-      # ── Step 4: Upload merged file to get a public URL for Fireflies ────────────
-      # transfer.sh keeps files for 14 days — sufficient for Fireflies to process.
-      # For production with sensitive recordings, replace with Cloudinary (see docs/).
+      # ── Step 4: Upload merged file as a GitHub Release asset ───────────────────
+      # Files are permanently stored in the repo's Releases. Public repo = public URL.
+      # Fireflies downloads from this URL to generate the transcript.
       - name: Upload merged file (GitHub Release)
         id: upload
         env:
@@ -149,6 +149,7 @@ jobs:
       # ── Step 6: Notify n8n (always fires, even on failure) ──────────────────────
       - name: Notify n8n
         if: always()
+        continue-on-error: true
         run: |
           if [ "${{ env.FIREFLIES_SUCCESS }}" = "True" ]; then
             STATUS="done"
