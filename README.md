@@ -14,14 +14,15 @@ Automated recording and attendance tracking for Pragmatico AI class sessions.
 
 ```
 .github/workflows/
-  merge-recordings.yml     ← GitHub Actions: download + merge + upload to Fireflies
+  merge-recordings.yml          ← GitHub Actions: download + merge + upload to Fireflies
 
 n8n/
-  flow1-bot-deployment-v6.json   ← Zoom webhook → deploy bots → save to Google Sheet
-  flow2-collect-merge-v5.json    ← Recall webhook → collect URLs → trigger merge
+  flow1-bot-deployment-v6.json  ← meeting.started → deploy bots → save bot IDs
+  flow2-meeting-ended-v1.json   ← meeting.ended → fetch recordings → trigger merge
+  flow2-collect-merge-v5.json   ← (old — Recall webhook approach, replaced by v1 above)
 
 docs/
-  setup-guide.md           ← Full setup instructions (Google Sheet, secrets, credentials)
+  setup-guide.md                ← Full setup instructions
 ```
 
 ## Quick Start

@@ -1,0 +1,104 @@
+{
+  "name": "Flow 2 — Meeting Ended → Fetch & Merge v1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "zoom-meeting-ended",
+        "options": {}
+      },
+      "id": "node-webhook",
+      "name": "Zoom Meeting Ended Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [-600, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [{ "value1": "={{ $json.body.event }}", "value2": "meeting.ended" }]
+        }
+      },
+      "id": "node-check-event",
+      "name": "Is meeting.ended?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [-380, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const payload = $input.item.json.body;\nconst meetingId = String(payload.payload?.object?.id || '');\n\nif (!meetingId) throw new Error('No meeting ID found in meeting.ended payload');\n\nconst staticData = $getWorkflowStaticData('global');\nconst session = staticData.meetings?.[meetingId];\n\nif (!session) {\n  throw new Error('Meeting ' + meetingId + ' not found in static data. Was Flow 1 active when this meeting started?');\n}\n\nreturn [{\n  json: {\n    meetingId,\n    bot1Id: session.bot1Id,\n    bot2Id: session.bot2Id,\n    bot3Id: session.bot3Id,\n    sessionTitle: session.sessionTitle,\n    sessionDate: session.sessionDate\n  }\n}];"
+      },
+      "id": "node-get-bot-ids",
+      "name": "Get Bot IDs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-160, 300]
+    },
+    {
+      "parameters": {
+        "amount": 20,
+        "unit": "minutes"
+      },
+      "id": "node-wait",
+      "name": "Wait 20 Minutes",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [60, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { bot1Id, bot2Id, bot3Id, sessionTitle, sessionDate, meetingId } = $input.item.json;\n\nfunction extractUrl(bot) {\n  const recordings = bot.recordings || [];\n  if (recordings.length === 0) return null;\n  const s = recordings[0].media_shortcuts || {};\n  return s?.video_mixed_mp4?.data?.download_url ||\n    s?.video_mixed?.data?.download_url ||\n    s?.speaker_timeline_video?.data?.download_url ||\n    bot.video_url || null;\n}\n\nasync function getBot(botId) {\n  return await $helpers.httpRequest({\n    method: 'GET',\n    url: `https://us-west-2.recall.ai/api/v1/bot/${botId}/`,\n    headers: { Authorization: 'Token CHANGE_THIS_RECALL_API_TOKEN' }\n  });\n}\n\nconst bot1 = await getBot(bot1Id);\nconst bot2 = await getBot(bot2Id);\nconst bot3 = await getBot(bot3Id);\n\nconst url1 = extractUrl(bot1);\nconst url2 = extractUrl(bot2);\nconst url3 = extractUrl(bot3);\n\nif (!url1) throw new Error('Bot 1 recording not ready after 20 min — try increasing the wait time or check Recall dashboard');\n\nreturn [{\n  json: {\n    meetingId,\n    sessionTitle,\n    sessionDate,\n    recording_url_1: url1 || '',\n    recording_url_2: url2 || '',\n    recording_url_3: url3 || ''\n  }\n}];"
+      },
+      "id": "node-fetch-recordings",
+      "name": "Fetch All Bot Recordings",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [280, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.github.com/repos/dancrrza/pragmatico-automations/actions/workflows/merge-recordings.yml/dispatches",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer CHANGE_THIS_GITHUB_PAT" },
+            { "name": "Accept", "value": "application/vnd.github+json" },
+            { "name": "X-GitHub-Api-Version", "value": "2022-11-28" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"ref\": \"main\",\n  \"inputs\": {\n    \"recording_url_1\": \"{{ $json.recording_url_1 }}\",\n    \"recording_url_2\": \"{{ $json.recording_url_2 }}\",\n    \"recording_url_3\": \"{{ $json.recording_url_3 }}\",\n    \"session_title\": \"{{ $json.sessionTitle }}\",\n    \"session_date\": \"{{ $json.sessionDate }}\",\n    \"meeting_id\": \"{{ $json.meetingId }}\"\n  }\n}",
+        "options": {}
+      },
+      "id": "node-trigger-github",
+      "name": "Trigger GitHub Actions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [500, 300]
+    }
+  ],
+  "connections": {
+    "Zoom Meeting Ended Webhook": {
+      "main": [[{ "node": "Is meeting.ended?", "type": "main", "index": 0 }]]
+    },
+    "Is meeting.ended?": {
+      "main": [
+        [{ "node": "Get Bot IDs", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Get Bot IDs": {
+      "main": [[{ "node": "Wait 20 Minutes", "type": "main", "index": 0 }]]
+    },
+    "Wait 20 Minutes": {
+      "main": [[{ "node": "Fetch All Bot Recordings", "type": "main", "index": 0 }]]
+    },
+    "Fetch All Bot Recordings": {
+      "main": [[{ "node": "Trigger GitHub Actions", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" }
+}

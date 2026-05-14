@@ -211,6 +211,16 @@
     },
     {
       "parameters": {
+        "jsCode": "const { meetingId, bot1Id, bot2Id, bot3Id, sessionTitle, date } = $input.item.json;\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.meetings) staticData.meetings = {};\n\nstaticData.meetings[meetingId] = {\n  bot1Id,\n  bot2Id,\n  bot3Id,\n  sessionTitle,\n  sessionDate: date\n};\n\nreturn [$input.item];"
+      },
+      "id": "node-save-static",
+      "name": "Save Bot IDs to Static Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1420, 300]
+    },
+    {
+      "parameters": {
         "operation": "update",
         "documentId": "CHANGE_THIS_GOOGLE_SHEET_ID",
         "sheetName": "Sessions",
@@ -237,7 +247,7 @@
           "name": "Google Sheets — Pragmatico"
         }
       },
-      "position": [1420, 300]
+      "position": [1640, 300]
     }
   ],
   "connections": {
@@ -285,6 +295,9 @@
       "main": [[{ "node": "Collect Bot IDs", "type": "main", "index": 2 }]]
     },
     "Collect Bot IDs": {
+      "main": [[{ "node": "Save Bot IDs to Static Data", "type": "main", "index": 0 }]]
+    },
+    "Save Bot IDs to Static Data": {
       "main": [[{ "node": "Save Bot IDs to Sheet", "type": "main", "index": 0 }]]
     }
   },
