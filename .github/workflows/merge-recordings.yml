@@ -128,7 +128,7 @@ jobs:
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${{ secrets.FIREFLIES_API_KEY }}" \
             -d "{
-              \"query\": \"mutation { uploadAudio(input: { url: \\\"${MERGED_URL}\\\", title: \\\"${TITLE}\\\" }) { success title } }\"
+              \"query\": \"mutation { uploadAudio(input: { url: \\\"${MERGED_URL}\\\", title: \\\"${TITLE}\\\", save_video: true }) { success title } }\"
             }")
 
           echo "Fireflies response: $RESPONSE"
