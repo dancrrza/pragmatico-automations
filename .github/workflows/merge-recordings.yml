@@ -3,27 +3,26 @@ name: Merge Pragmatico Session Recordings
 on:
   workflow_dispatch:
     inputs:
-      coordinator_url:
-        description: 'Main room bot recording URL'
+      bot1_url:
+        description: 'Bot 1 recording URL (main room → BR1 → main room closing)'
         required: true
-      br1_url:
-        description: 'Breakout Room 1 recording URL (leave empty if no breakout)'
+      bot2_url:
+        description: 'Bot 2 recording URL (main room → BR2 → main room closing)'
         required: false
         default: ''
-      br2_url:
-        description: 'Breakout Room 2 recording URL (leave empty if no breakout)'
-        required: false
-        default: ''
-      coordinator_start_time:
-        description: 'ISO timestamp when coordinator bot started recording (from Recall API)'
+      bot1_start_time:
+        description: 'ISO timestamp when Bot 1 started recording'
+        required: true
+      bot2_start_time:
+        description: 'ISO timestamp when Bot 2 started recording'
         required: false
         default: ''
       t1:
-        description: 'ISO timestamp when first breakout opened (leave empty if no breakouts)'
+        description: 'ISO timestamp when first bot entered a breakout room'
         required: false
         default: ''
       t2:
-        description: 'ISO timestamp when last breakout closed (leave empty if no breakouts)'
+        description: 'ISO timestamp when last breakout room closed'
         required: false
         default: ''
       session_title:
@@ -44,131 +43,127 @@ jobs:
       - name: Install FFmpeg
         run: sudo apt-get install -y ffmpeg
 
-      - name: Download coordinator (main room) recording
+      - name: Download Bot 1 recording
         run: |
-          echo "Downloading coordinator recording..."
-          curl -L --retry 3 "${{ github.event.inputs.coordinator_url }}" -o coordinator.mp4
-          echo "Coordinator size: $(du -sh coordinator.mp4 | cut -f1)"
+          echo "Downloading Bot 1..."
+          curl -L --retry 3 "${{ github.event.inputs.bot1_url }}" -o bot1.mp4
+          echo "Bot 1 size: $(du -sh bot1.mp4 | cut -f1)"
 
-      - name: Download breakout recordings
+      - name: Download Bot 2 recording
         run: |
-          BR1="${{ github.event.inputs.br1_url }}"
-          BR2="${{ github.event.inputs.br2_url }}"
-
-          if [ -n "$BR1" ]; then
-            echo "Downloading Breakout Room 1..."
-            curl -L --retry 3 "$BR1" -o br1.mp4
-            echo "BR1 size: $(du -sh br1.mp4 | cut -f1)"
+          BOT2="${{ github.event.inputs.bot2_url }}"
+          if [ -n "$BOT2" ]; then
+            echo "Downloading Bot 2..."
+            curl -L --retry 3 "$BOT2" -o bot2.mp4
+            echo "Bot 2 size: $(du -sh bot2.mp4 | cut -f1)"
           else
-            echo "No Breakout Room 1 URL provided."
-          fi
-
-          if [ -n "$BR2" ]; then
-            echo "Downloading Breakout Room 2..."
-            curl -L --retry 3 "$BR2" -o br2.mp4
-            echo "BR2 size: $(du -sh br2.mp4 | cut -f1)"
-          else
-            echo "No Breakout Room 2 URL provided."
+            echo "No Bot 2 URL — session had no breakout rooms or only 1 bot."
           fi
 
       - name: Build merged video
         run: |
           T1="${{ github.event.inputs.t1 }}"
           T2="${{ github.event.inputs.t2 }}"
-          COORD_START="${{ github.event.inputs.coordinator_start_time }}"
+          BOT1_START="${{ github.event.inputs.bot1_start_time }}"
+          BOT2_START="${{ github.event.inputs.bot2_start_time }}"
 
-          if [ -n "$T1" ] && [ -n "$T2" ] && [ -n "$COORD_START" ]; then
-            echo "=== SMART MERGE MODE (timestamp-based) ==="
+          if [ -n "$T1" ] && [ -n "$T2" ] && [ -n "$BOT1_START" ]; then
+            echo "=== SMART MERGE MODE ==="
+            echo "Architecture: [Bot1:intro] + [Bot1:BR1] + [Bot2:BR2] + [Bot1:closing]"
 
-            # Convert ISO timestamps to Unix epoch (seconds)
-            coord_epoch=$(date -d "$COORD_START" +%s)
+            # Convert to epoch seconds
+            bot1_epoch=$(date -d "$BOT1_START" +%s)
             t1_epoch=$(date -d "$T1" +%s)
             t2_epoch=$(date -d "$T2" +%s)
 
-            cut_a_end=$((t1_epoch - coord_epoch))
-            cut_b_start=$((t2_epoch - coord_epoch))
+            # Cut points for Bot 1 (seconds from recording start)
+            intro_end=$((t1_epoch - bot1_epoch))
+            br1_end=$((t2_epoch - bot1_epoch))
 
-            echo "Coordinator started at: $COORD_START (epoch: $coord_epoch)"
-            echo "First breakout opened:  $T1 (epoch: $t1_epoch)"
-            echo "Last breakout closed:   $T2 (epoch: $t2_epoch)"
-            echo "Intro segment: 0s → ${cut_a_end}s"
-            echo "Closing segment: ${cut_b_start}s → end"
+            echo "Bot 1 recording started: $BOT1_START"
+            echo "Breakouts opened (T1):   $T1"
+            echo "Breakouts closed (T2):   $T2"
+            echo "Intro duration:          ${intro_end}s"
+            echo "BR1 segment:             ${intro_end}s → ${br1_end}s"
+            echo "Closing starts at:       ${br1_end}s"
 
-            # Validate cut points make sense
-            if [ "$cut_a_end" -le 0 ]; then
-              echo "WARNING: cut_a_end is $cut_a_end — T1 is before or equal to coordinator start. Using 0."
-              cut_a_end=0
+            # Validate
+            if [ "$intro_end" -le 0 ]; then
+              echo "WARNING: intro_end=$intro_end — T1 is before Bot 1 start. Setting to 0."
+              intro_end=0
             fi
 
-            # Segment A: main room intro (start → T1)
-            if [ "$cut_a_end" -gt 0 ]; then
-              ffmpeg -i coordinator.mp4 -t $cut_a_end -c copy segment_a.mp4
-              echo "Segment A (intro): ${cut_a_end}s"
+            # Segment: Intro (Bot 1, 0 → T1)
+            if [ "$intro_end" -gt 0 ]; then
+              ffmpeg -i bot1.mp4 -t $intro_end -c copy intro.mp4
+              echo "✅ Intro: ${intro_end}s"
             fi
 
-            # Segment B: main room closing (T2 → end)
-            ffmpeg -i coordinator.mp4 -ss $cut_b_start -c copy segment_b.mp4
-            echo "Segment B (closing): from ${cut_b_start}s to end"
+            # Segment: BR1 (Bot 1, T1 → T2)
+            ffmpeg -i bot1.mp4 -ss $intro_end -to $br1_end -c copy br1.mp4
+            echo "✅ BR1: ${intro_end}s → ${br1_end}s"
 
-            # Build concat file list
+            # Segment: BR2 (Bot 2, T1 → T2) — only if Bot 2 exists
+            if [ -f bot2.mp4 ] && [ -n "$BOT2_START" ]; then
+              bot2_epoch=$(date -d "$BOT2_START" +%s)
+              br2_start=$((t1_epoch - bot2_epoch))
+              br2_end=$((t2_epoch - bot2_epoch))
+              if [ "$br2_start" -lt 0 ]; then br2_start=0; fi
+              ffmpeg -i bot2.mp4 -ss $br2_start -to $br2_end -c copy br2.mp4
+              echo "✅ BR2: ${br2_start}s → ${br2_end}s"
+            else
+              echo "No Bot 2 — skipping BR2 segment."
+            fi
+
+            # Segment: Closing (Bot 1, T2 → end)
+            ffmpeg -i bot1.mp4 -ss $br1_end -c copy closing.mp4
+            echo "✅ Closing: from ${br1_end}s to end"
+
+            # Build file list in order
             > filelist.txt
+            [ -f intro.mp4  ] && echo "file 'intro.mp4'"   >> filelist.txt
+            [ -f br1.mp4    ] && echo "file 'br1.mp4'"     >> filelist.txt
+            [ -f br2.mp4    ] && echo "file 'br2.mp4'"     >> filelist.txt
+            [ -f closing.mp4 ] && echo "file 'closing.mp4'" >> filelist.txt
 
-            if [ "$cut_a_end" -gt 0 ] && [ -f segment_a.mp4 ]; then
-              echo "file 'segment_a.mp4'" >> filelist.txt
-            fi
-
-            if [ -f br1.mp4 ]; then
-              echo "file 'br1.mp4'" >> filelist.txt
-            fi
-
-            if [ -f br2.mp4 ]; then
-              echo "file 'br2.mp4'" >> filelist.txt
-            fi
-
-            if [ -f segment_b.mp4 ]; then
-              echo "file 'segment_b.mp4'" >> filelist.txt
-            fi
-
-            echo "=== Merge order ==="
+            echo "=== Final merge order ==="
             cat filelist.txt
 
             ffmpeg -f concat -safe 0 -i filelist.txt -c copy merged.mp4
 
           else
-            echo "=== SIMPLE MODE (no breakout timestamps — using coordinator recording) ==="
-            cp coordinator.mp4 merged.mp4
+            echo "=== SIMPLE MODE (no breakout timestamps) ==="
+            echo "Using Bot 1 recording as-is."
+            cp bot1.mp4 merged.mp4
           fi
 
-          echo "Final video size: $(du -sh merged.mp4 | cut -f1)"
+          echo "Final video: $(du -sh merged.mp4 | cut -f1)"
 
       - name: Upload to GitHub Release
         id: upload_release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          SESSION_DATE="${{ github.event.inputs.session_date }}"
-          MEETING_ID="${{ github.event.inputs.meeting_id }}"
-          SESSION_TITLE="${{ github.event.inputs.session_title }}"
-          FILENAME="session-${SESSION_DATE}-${MEETING_ID}.mp4"
-          TAG="session-${SESSION_DATE}-${MEETING_ID}"
+          DATE="${{ github.event.inputs.session_date }}"
+          MID="${{ github.event.inputs.meeting_id }}"
+          TITLE="${{ github.event.inputs.session_title }}"
+          FILENAME="session-${DATE}-${MID}.mp4"
+          TAG="session-${DATE}-${MID}"
 
-          # Create the release and upload the file
           gh release create "$TAG" \
-            --title "Session: ${SESSION_TITLE} (${SESSION_DATE})" \
-            --notes "Zoom Meeting ID: ${MEETING_ID} | Auto-generated by Pragmatico Recording System" \
+            --title "Session: ${TITLE} (${DATE})" \
+            --notes "Zoom Meeting ID: ${MID} | Segments: intro + BR1 + BR2 + closing" \
             "merged.mp4#${FILENAME}" \
             --repo ${{ github.repository }}
 
-          # Get the public download URL
           VIDEO_URL=$(gh release view "$TAG" \
             --json assets \
             --jq ".assets[] | select(.name == \"${FILENAME}\") | .browserDownloadUrl" \
             --repo ${{ github.repository }})
 
           echo "video_url=$VIDEO_URL" >> $GITHUB_OUTPUT
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-          echo "=== Video uploaded ==="
-          echo "URL: $VIDEO_URL"
+          echo "=== Video published ==="
+          echo "$VIDEO_URL"
 
       - name: Upload to Fireflies for transcript
         env:
@@ -176,24 +171,17 @@ jobs:
         run: |
           VIDEO_URL="${{ steps.upload_release.outputs.video_url }}"
           TITLE="${{ github.event.inputs.session_title }} — ${{ github.event.inputs.session_date }}"
-
-          echo "Uploading to Fireflies for transcript (NOT for sharing)..."
-
-          RESPONSE=$(curl -s -X POST https://api.fireflies.ai/graphql \
+          echo "Sending to Fireflies for transcript (NOT for sharing)..."
+          curl -s -X POST https://api.fireflies.ai/graphql \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $FIREFLIES_API_KEY" \
-            -d "{
-              \"query\": \"mutation { uploadAudio(input: { url: \\\"$VIDEO_URL\\\", title: \\\"$TITLE\\\", save_video: true }) { id title } }\"
-            }")
+            -d "{\"query\": \"mutation { uploadAudio(input: { url: \\\"$VIDEO_URL\\\", title: \\\"$TITLE\\\", save_video: true }) { id title } }\"}"
 
-          echo "Fireflies response: $RESPONSE"
-
-      - name: Notify n8n with video URL
+      - name: Notify n8n with final video URL
         env:
           N8N_CALLBACK_URL: ${{ secrets.N8N_CALLBACK_URL }}
         run: |
           if [ -n "$N8N_CALLBACK_URL" ]; then
-            echo "Notifying n8n..."
             curl -s -X POST "$N8N_CALLBACK_URL" \
               -H "Content-Type: application/json" \
               -d "{
@@ -202,7 +190,4 @@ jobs:
                 \"session_title\": \"${{ github.event.inputs.session_title }}\",
                 \"video_url\": \"${{ steps.upload_release.outputs.video_url }}\"
               }"
-            echo "n8n notified."
-          else
-            echo "No N8N_CALLBACK_URL set — skipping notification."
           fi
