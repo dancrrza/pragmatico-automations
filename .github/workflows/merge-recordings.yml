@@ -149,8 +149,10 @@ jobs:
           DATE="${{ github.event.inputs.session_date }}"
           MID="${{ github.event.inputs.meeting_id }}"
           TITLE="${{ github.event.inputs.session_title }}"
-          FILENAME="session-${DATE}-${MID}.mp4"
-          TAG="session-${DATE}-${MID}"
+          BOT1_START="${{ github.event.inputs.bot1_start_time }}"
+          TIME=$(date -d "$BOT1_START" +"%H%M" 2>/dev/null || echo "$GITHUB_RUN_NUMBER")
+          FILENAME="session-${DATE}-${TIME}-${MID}.mp4"
+          TAG="session-${DATE}-${TIME}-${MID}"
 
           gh release create "$TAG" \
             --title "Session: ${TITLE} (${DATE})" \
