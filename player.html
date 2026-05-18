@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Pragmático — Grabación de Sesión</title>
+  <title>Pragmatico — Session Recording</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -21,82 +21,58 @@
     .header { margin-bottom: 16px; }
     .header h1 { font-size: 18px; font-weight: 600; color: #fff; }
     .header p  { font-size: 14px; color: #888; margin-top: 4px; }
-    video {
-      width: 100%;
-      border-radius: 8px;
-      background: #000;
-      display: block;
-    }
+    video { width: 100%; border-radius: 8px; background: #000; display: block; }
     .footer { margin-top: 12px; font-size: 12px; color: #555; text-align: center; }
     .error {
-      background: #1a0000;
-      border: 1px solid #ff4444;
-      border-radius: 8px;
-      padding: 24px;
-      text-align: center;
-      color: #ff8888;
+      background: #1a0000; border: 1px solid #ff4444;
+      border-radius: 8px; padding: 24px; text-align: center; color: #ff8888;
     }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <h1 id="session-title">Cargando sesión...</h1>
+      <h1 id="session-title">Loading session...</h1>
       <p id="session-meta"></p>
     </div>
     <div id="player-wrap">
       <video id="video" controls preload="metadata">
-        Tu navegador no soporta video HTML5.
+        Your browser does not support HTML5 video.
       </video>
     </div>
-    <div class="footer">Pragmático &mdash; Solo para uso interno</div>
+    <div class="footer">Pragmatico &mdash; For internal use only</div>
   </div>
-
   <script>
-    const params  = new URLSearchParams(window.location.search);
-    const videoUrl   = params.get('v')  || '';
-    const sessionId  = params.get('s')  || '';
-    const email      = params.get('e')  || '';
-    const sessionDate = params.get('d') || '';
-    const title      = params.get('t')  || 'Sesión Pragmático';
-
-    const N8N_WEBHOOK = 'https://pragmatico.app.n8n.cloud/webhook/video-watch';
-    const PING_INTERVAL = 30; // seconds of real playback between pings
+    const params      = new URLSearchParams(window.location.search);
+    const videoUrl    = params.get('v')  || '';
+    const sessionId   = params.get('s')  || '';
+    const email       = params.get('e')  || '';
+    const sessionDate = params.get('d')  || '';
+    const title       = params.get('t')  || 'Session Recording';
+    const N8N_WEBHOOK  = 'https://pragmatico.app.n8n.cloud/webhook/video-watch';
+    const PING_INTERVAL = 30;
 
     document.getElementById('session-title').textContent = decodeURIComponent(title);
-    if (sessionDate) {
-      document.getElementById('session-meta').textContent =
-        decodeURIComponent(email) + ' · ' + sessionDate;
-    }
+    if (sessionDate) document.getElementById('session-meta').textContent = sessionDate;
 
     if (!videoUrl) {
       document.getElementById('player-wrap').innerHTML =
-        '<div class="error">Link inválido — falta la URL del video.</div>';
+        '<div class="error">Invalid link — missing video URL.</div>';
     } else {
       const video = document.getElementById('video');
       video.src = decodeURIComponent(videoUrl);
-
       let lastPing = 0;
       let maxReached = 0;
 
       function ping(event) {
-        const pct = video.duration
-          ? Math.round((video.currentTime / video.duration) * 100)
-          : 0;
+        const pct = video.duration ? Math.round((video.currentTime / video.duration) * 100) : 0;
         if (video.currentTime > maxReached) maxReached = video.currentTime;
-
         const payload = JSON.stringify({
-          email:       decodeURIComponent(email),
-          sessionId,
-          sessionDate,
-          event,
+          email: decodeURIComponent(email), sessionId, sessionDate, event,
           currentTime: Math.round(video.currentTime),
-          duration:    Math.round(video.duration || 0),
-          pctWatched:  pct,
-          maxReached:  Math.round(maxReached)
+          duration: Math.round(video.duration || 0),
+          pctWatched: pct, maxReached: Math.round(maxReached)
         });
-
-        // sendBeacon is fire-and-forget, works even on tab close
         if (navigator.sendBeacon) {
           navigator.sendBeacon(N8N_WEBHOOK, new Blob([payload], { type: 'application/json' }));
         } else {
@@ -109,11 +85,9 @@
       video.addEventListener('pause',  () => ping('pause'));
       video.addEventListener('ended',  () => ping('ended'));
       video.addEventListener('seeked', () => ping('seeked'));
-
       video.addEventListener('timeupdate', () => {
         if (!video.paused && (video.currentTime - lastPing) >= PING_INTERVAL) {
-          ping('progress');
-          lastPing = video.currentTime;
+          ping('progress'); lastPing = video.currentTime;
         }
       });
     }
