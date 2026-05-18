@@ -38,6 +38,8 @@ on:
 jobs:
   merge:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Install FFmpeg
@@ -121,10 +123,10 @@ jobs:
 
             # Build file list in order
             > filelist.txt
-            [ -f intro.mp4  ] && echo "file 'intro.mp4'"   >> filelist.txt
-            [ -f br1.mp4    ] && echo "file 'br1.mp4'"     >> filelist.txt
-            [ -f br2.mp4    ] && echo "file 'br2.mp4'"     >> filelist.txt
-            [ -f closing.mp4 ] && echo "file 'closing.mp4'" >> filelist.txt
+            [ -f intro.mp4   ] && echo "file 'intro.mp4'"    >> filelist.txt
+            [ -f br1.mp4     ] && echo "file 'br1.mp4'"      >> filelist.txt
+            [ -f br2.mp4     ] && echo "file 'br2.mp4'"      >> filelist.txt
+            [ -f closing.mp4 ] && echo "file 'closing.mp4'"  >> filelist.txt
 
             echo "=== Final merge order ==="
             cat filelist.txt
