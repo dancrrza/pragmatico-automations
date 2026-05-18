@@ -167,6 +167,7 @@ jobs:
           echo "$VIDEO_URL"
 
       - name: Upload to Fireflies for transcript
+        continue-on-error: true
         env:
           FIREFLIES_API_KEY: ${{ secrets.FIREFLIES_API_KEY }}
         run: |
