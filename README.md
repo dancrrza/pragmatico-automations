@@ -1,39 +1,45 @@
 # Pragmatico Automations
 
-Automated recording and attendance tracking for Pragmatico AI class sessions.
+Automated session recording and attendance tracking for Pragmatico class sessions.
 
 ## What This Does
 
-1. Deploys 3 Recall.ai bots into Zoom meetings (main room + 2 breakout rooms)
-2. Collects all 3 recordings when the session ends
-3. Merges them into 1 MP4 file via GitHub Actions (ffmpeg)
-4. Uploads the merged file to Fireflies as a single meeting entry
-5. Tracks who attended live vs. who needs to watch the recording
+1. Deploys 2 recording bots into Zoom meetings (one per breakout room)
+2. Captures timestamps when breakout rooms open and close
+3. Merges recordings into one MP4 — intro + breakout room 1 + breakout room 2 + closing
+4. Publishes the merged video as a private download link
+5. Sends each participant a personalized link to watch the recording
+6. Tracks who watched, how much, and when
 
 ## Files
 
 ```
 .github/workflows/
-  merge-recordings.yml          ← GitHub Actions: download + merge + upload to Fireflies
+  merge-recordings.yml   ← downloads recordings, merges with ffmpeg, publishes
 
-n8n/
-  flow1-bot-deployment-v6.json  ← meeting.started → deploy bots → save bot IDs
-  flow2-meeting-ended-v1.json   ← meeting.ended → fetch recordings → trigger merge
-  flow2-collect-merge-v5.json   ← (old — Recall webhook approach, replaced by v1 above)
-
-docs/
-  setup-guide.md                ← Full setup instructions
+player.html              ← video player served via GitHub Pages
+                           tracks watch progress per participant
 ```
 
-## Quick Start
+## Required Secrets
 
-See [docs/setup-guide.md](docs/setup-guide.md) for full instructions.
+Set these in the repository Settings → Secrets → Actions:
 
-**Required secrets in GitHub Actions Settings:**
-- `FIREFLIES_API_KEY`
-- `N8N_CALLBACK_URL`
+| Secret | Description |
+|--------|-------------|
+| `FIREFLIES_API_KEY` | API key for transcript upload |
+| `N8N_CALLBACK_URL` | Webhook URL to notify when video is ready |
 
-**Required changes in n8n flows:**
-- Google Sheet ID
-- Google Sheets OAuth2 credential
-- GitHub Personal Access Token
+## Video Player
+
+The player is available at:
+```
+https://dancrrza.github.io/pragmatico-automations/player.html
+```
+
+It accepts URL parameters to identify the session and participant:
+- `v` — video URL
+- `s` — session ID
+- `e` — participant email
+- `d` — session date
+- `t` — session title
