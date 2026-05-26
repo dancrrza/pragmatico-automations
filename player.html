@@ -122,19 +122,18 @@
     });
 
     function sendPing(payload) {
-      const data = JSON.stringify(payload);
       console.log('[Pragmatico] ping:', payload.event, payload);
-      try {
-        if (navigator.sendBeacon) {
-          const sent = navigator.sendBeacon(N8N_WEBHOOK, new Blob([data], {type:'application/json'}));
-          console.log('[Pragmatico] sendBeacon result:', sent);
-        } else {
-          fetch(N8N_WEBHOOK, {method:'POST', body:data, headers:{'Content-Type':'application/json'}, keepalive:true});
-        }
-      } catch(err) {
-        console.error('[Pragmatico] ping error:', err);
-        fetch(N8N_WEBHOOK, {method:'POST', body:data, headers:{'Content-Type':'application/json'}}).catch(function(){});
-      }
+      fetch(N8N_WEBHOOK, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'omit',
+        keepalive: true
+      }).then(function(r) {
+        console.log('[Pragmatico] ping sent:', r.status);
+      }).catch(function(err) {
+        console.error('[Pragmatico] ping failed:', err);
+      });
     }
 
     function launchPlayer(email) {
@@ -149,19 +148,19 @@
 
       function ping(event, overrideTime) {
         const vid = document.getElementById('main-video');
-        const currentTime = (vid && !overrideTime) ? vid.currentTime : (overrideTime || 0);
+        const currentTime = (vid && overrideTime === undefined) ? vid.currentTime : (overrideTime || 0);
         const duration    = (vid && vid.duration) ? vid.duration : 0;
         const pct = duration ? Math.round((currentTime / duration) * 100) : 0;
         if (currentTime > maxReached) maxReached = currentTime;
         sendPing({
-          email: email.toLowerCase().trim(),
-          sessionId: sessionId,
+          email:       email.toLowerCase().trim(),
+          sessionId:   sessionId,
           sessionDate: decodeURIComponent(sessionDate),
-          event: event,
+          event:       event,
           currentTime: Math.round(currentTime),
-          duration: Math.round(duration),
-          pctWatched: pct,
-          maxReached: Math.round(maxReached)
+          duration:    Math.round(duration),
+          pctWatched:  pct,
+          maxReached:  Math.round(maxReached)
         });
       }
 
