@@ -96,8 +96,7 @@
     const sessionDate = params.get('d') || '';
     const title       = params.get('t') || 'Session Recording';
 
-    const N8N_WEBHOOK  = 'https://pragmatico.app.n8n.cloud/webhook/video-watch';
-    const PING_INTERVAL = 30;
+    const N8N_WEBHOOK = 'https://pragmatico.app.n8n.cloud/webhook/video-watch';
 
     const decodedTitle = decodeURIComponent(title);
     document.getElementById('gate-session-info').textContent =
@@ -122,18 +121,13 @@
     });
 
     function sendPing(payload) {
-      console.log('[Pragmatico] ping:', payload.event, payload);
       fetch(N8N_WEBHOOK, {
         method: 'POST',
         body: JSON.stringify(payload),
         headers: { 'Content-Type': 'application/json' },
         credentials: 'omit',
         keepalive: true
-      }).then(function(r) {
-        console.log('[Pragmatico] ping sent:', r.status);
-      }).catch(function(err) {
-        console.error('[Pragmatico] ping failed:', err);
-      });
+      }).catch(function() {});
     }
 
     function launchPlayer(email) {
@@ -144,11 +138,13 @@
 
       const wrap = document.getElementById('player-wrap');
       const decodedUrl = decodeURIComponent(videoUrl);
-      let lastPing = 0, maxReached = 0, canPlay = false;
+      let started = false;
+      let maxReached = 0;
+      let canPlay = false;
 
-      function ping(event, overrideTime) {
+      function ping(event) {
         const vid = document.getElementById('main-video');
-        const currentTime = (vid && overrideTime === undefined) ? vid.currentTime : (overrideTime || 0);
+        const currentTime = vid ? vid.currentTime : 0;
         const duration    = (vid && vid.duration) ? vid.duration : 0;
         const pct = duration ? Math.round((currentTime / duration) * 100) : 0;
         if (currentTime > maxReached) maxReached = currentTime;
@@ -157,8 +153,6 @@
           sessionId:   sessionId,
           sessionDate: decodeURIComponent(sessionDate),
           event:       event,
-          currentTime: Math.round(currentTime),
-          duration:    Math.round(duration),
           pctWatched:  pct,
           maxReached:  Math.round(maxReached)
         });
@@ -171,14 +165,16 @@
       wrap.appendChild(vid);
 
       vid.addEventListener('canplay', function() { canPlay = true; });
-      vid.addEventListener('play',    function() { ping('play'); });
-      vid.addEventListener('pause',   function() { ping('pause'); });
-      vid.addEventListener('ended',   function() { ping('ended'); });
-      vid.addEventListener('seeked',  function() { ping('seeked'); });
-      vid.addEventListener('timeupdate', function() {
-        if (!vid.paused && (vid.currentTime - lastPing) >= PING_INTERVAL) {
-          ping('progress'); lastPing = vid.currentTime;
+
+      vid.addEventListener('play', function() {
+        if (!started) {
+          started = true;
+          ping('started');
         }
+      });
+
+      vid.addEventListener('ended', function() {
+        ping('completed');
       });
 
       vid.addEventListener('error', showFallback);
@@ -186,7 +182,7 @@
 
       function showFallback() {
         if (wrap.querySelector('.fallback')) return;
-        ping('download_fallback', 0);
+        ping('download_fallback');
         vid.remove();
         wrap.innerHTML = '<div class="fallback"><p>Your browser cannot play this video directly.<br>Click below to download and watch.</p><a class="btn" href="' + decodedUrl + '" download>Download Recording</a></div>';
       }
