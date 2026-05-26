@@ -32,89 +32,148 @@
       text-decoration: none; font-weight: 600; font-size: 15px;
     }
     .btn:hover { background: #ddd; }
+    #gate {
+      min-height: 100vh; width: 100%;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+    }
+    .gate-box {
+      background: #1a1a1a; border: 1px solid #2a2a2a;
+      border-radius: 12px; padding: 48px 40px;
+      max-width: 440px; width: 100%; text-align: center;
+    }
+    .gate-box h2 { font-size: 20px; font-weight: 600; margin-bottom: 8px; }
+    .gate-session { font-size: 14px; color: #888; margin-bottom: 32px; }
+    .gate-box label { display: block; text-align: left; font-size: 13px; color: #aaa; margin-bottom: 8px; }
+    .gate-box input[type="email"] {
+      width: 100%; padding: 12px 16px;
+      background: #111; border: 1px solid #333;
+      border-radius: 8px; color: #fff; font-size: 15px;
+      margin-bottom: 16px; outline: none;
+    }
+    .gate-box input[type="email"]:focus { border-color: #666; }
+    .gate-box input[type="email"]::placeholder { color: #555; }
+    .gate-btn {
+      width: 100%; padding: 13px;
+      background: #fff; color: #000;
+      border: none; border-radius: 8px;
+      font-size: 15px; font-weight: 600;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .gate-btn:hover { background: #e0e0e0; }
+    .gate-error { color: #ff6b6b; font-size: 13px; margin-top: 12px; }
+    .gate-note { font-size: 12px; color: #555; margin-top: 20px; }
+    #player-section { display: none; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <h1 id="session-title">Loading session...</h1>
-      <p id="session-meta"></p>
+
+  <div id="gate">
+    <div class="gate-box">
+      <h2>Access Session Recording</h2>
+      <p class="gate-session" id="gate-session-info">Loading...</p>
+      <label for="email-input">Enter your work email to continue</label>
+      <input type="email" id="email-input" placeholder="you@company.com" autocomplete="email">
+      <button class="gate-btn" id="watch-btn">Watch Recording &rarr;</button>
+      <p class="gate-error" id="gate-error"></p>
+      <p class="gate-note">Your viewing progress is tracked for compliance.</p>
     </div>
-    <div id="player-wrap"></div>
-    <div class="footer">Pragmatico &mdash; For internal use only</div>
+  </div>
+
+  <div id="player-section">
+    <div class="container">
+      <div class="header">
+        <h1 id="session-title">Loading session...</h1>
+        <p id="session-meta"></p>
+      </div>
+      <div id="player-wrap"></div>
+      <div class="footer">Pragmatico &mdash; For internal use only</div>
+    </div>
   </div>
 
   <script>
     const params      = new URLSearchParams(window.location.search);
     const videoUrl    = params.get('v') || '';
     const sessionId   = params.get('s') || '';
-    const email       = params.get('e') || '';
     const sessionDate = params.get('d') || '';
     const title       = params.get('t') || 'Session Recording';
 
     const N8N_WEBHOOK  = 'https://pragmatico.app.n8n.cloud/webhook/video-watch';
     const PING_INTERVAL = 30;
 
-    document.getElementById('session-title').textContent = decodeURIComponent(title);
-    if (sessionDate) document.getElementById('session-meta').textContent = sessionDate;
+    const decodedTitle = decodeURIComponent(title);
+    document.getElementById('gate-session-info').textContent =
+      decodedTitle + (sessionDate ? ' — ' + decodeURIComponent(sessionDate) : '');
 
-    const wrap = document.getElementById('player-wrap');
+    const emailInput = document.getElementById('email-input');
+    const watchBtn   = document.getElementById('watch-btn');
+    const gateError  = document.getElementById('gate-error');
 
-    if (!videoUrl) {
-      wrap.innerHTML = '<div class="error">Invalid link — missing video URL.</div>';
-    } else {
+    function isValidEmail(e) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e); }
+
+    watchBtn.addEventListener('click', function() {
+      const email = emailInput.value.trim();
+      if (!email) { gateError.textContent = 'Please enter your email.'; return; }
+      if (!isValidEmail(email)) { gateError.textContent = 'Please enter a valid email address.'; return; }
+      if (!videoUrl) { gateError.textContent = 'Invalid session link. Contact your administrator.'; return; }
+      launchPlayer(email);
+    });
+
+    emailInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') watchBtn.click();
+    });
+
+    function launchPlayer(email) {
+      document.getElementById('gate').style.display = 'none';
+      document.getElementById('player-section').style.display = 'block';
+      document.getElementById('session-title').textContent = decodedTitle;
+      if (sessionDate) document.getElementById('session-meta').textContent = decodeURIComponent(sessionDate);
+
+      const wrap = document.getElementById('player-wrap');
       const decodedUrl = decodeURIComponent(videoUrl);
-
-      // Try video player first
-      const video = document.createElement('video');
-      video.controls = true;
-      video.src = decodedUrl;
-      wrap.appendChild(video);
-
-      let lastPing = 0;
-      let maxReached = 0;
-      let canPlay = false;
+      let lastPing = 0, maxReached = 0, canPlay = false;
 
       function ping(event) {
-        const pct = video.duration ? Math.round((video.currentTime / video.duration) * 100) : 0;
-        if (video.currentTime > maxReached) maxReached = video.currentTime;
+        const vid = document.getElementById('main-video');
+        if (!vid) return;
+        const pct = vid.duration ? Math.round((vid.currentTime / vid.duration) * 100) : 0;
+        if (vid.currentTime > maxReached) maxReached = vid.currentTime;
         const payload = JSON.stringify({
-          email: decodeURIComponent(email), sessionId, sessionDate, event,
-          currentTime: Math.round(video.currentTime),
-          duration: Math.round(video.duration || 0),
+          email: email.toLowerCase().trim(),
+          sessionId, sessionDate: decodeURIComponent(sessionDate), event,
+          currentTime: Math.round(vid.currentTime),
+          duration: Math.round(vid.duration || 0),
           pctWatched: pct, maxReached: Math.round(maxReached)
         });
         if (navigator.sendBeacon) {
-          navigator.sendBeacon(N8N_WEBHOOK, new Blob([payload], { type: 'application/json' }));
+          navigator.sendBeacon(N8N_WEBHOOK, new Blob([payload], {type:'application/json'}));
         } else {
-          fetch(N8N_WEBHOOK, { method: 'POST', body: payload,
-            headers: { 'Content-Type': 'application/json' }, keepalive: true });
+          fetch(N8N_WEBHOOK, {method:'POST', body:payload, headers:{'Content-Type':'application/json'}, keepalive:true});
         }
       }
 
-      video.addEventListener('canplay', () => { canPlay = true; });
-      video.addEventListener('play',   () => ping('play'));
-      video.addEventListener('pause',  () => ping('pause'));
-      video.addEventListener('ended',  () => ping('ended'));
-      video.addEventListener('seeked', () => ping('seeked'));
-      video.addEventListener('timeupdate', () => {
-        if (!video.paused && (video.currentTime - lastPing) >= PING_INTERVAL) {
-          ping('progress'); lastPing = video.currentTime;
+      const vid = document.createElement('video');
+      vid.controls = true; vid.id = 'main-video'; vid.src = decodedUrl;
+      wrap.appendChild(vid);
+
+      vid.addEventListener('canplay', () => { canPlay = true; });
+      vid.addEventListener('play',    () => ping('play'));
+      vid.addEventListener('pause',   () => ping('pause'));
+      vid.addEventListener('ended',   () => ping('ended'));
+      vid.addEventListener('seeked',  () => ping('seeked'));
+      vid.addEventListener('timeupdate', () => {
+        if (!vid.paused && (vid.currentTime - lastPing) >= PING_INTERVAL) {
+          ping('progress'); lastPing = vid.currentTime;
         }
       });
 
-      // Fallback: if video can't load (CORS / format issue), show download button
-      video.addEventListener('error', showFallback);
+      vid.addEventListener('error', showFallback);
       setTimeout(() => { if (!canPlay) showFallback(); }, 5000);
 
       function showFallback() {
         if (wrap.querySelector('.fallback')) return;
-        video.remove();
-        wrap.innerHTML = `
-          <div class="fallback">
-            <p>Your browser cannot play this video directly.<br>Click below to download and watch.</p>
-            <a class="btn" href="${decodedUrl}" download>Download Recording</a>
-          </div>`;
+        vid.remove();
+        wrap.innerHTML = '<div class="fallback"><p>Your browser cannot play this video directly.<br>Click below to download and watch.</p><a class="btn" href="' + decodedUrl + '" download>Download Recording</a></div>';
         ping('download_fallback');
       }
     }
