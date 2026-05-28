@@ -63,6 +63,7 @@
     const videoUrl    = params.get('v') || '';
     const sessionId   = params.get('s') || '';
     const sessionDate = params.get('d') || '';
+    const sheetId     = params.get('sid') || '';
     const title       = params.get('t') || 'Session Recording';
     const N8N_WEBHOOK = 'https://pragmatico.app.n8n.cloud/webhook/video-watch';
 
@@ -122,6 +123,7 @@
           email:           email.toLowerCase().trim(),
           sessionId:       sessionId,
           sessionDate:     decodeURIComponent(sessionDate),
+          sheetId:         sheetId,
           event:           event,
           watchedAt:       new Date().toISOString(),
           pctWatched:      duration ? Math.round((maxReached / duration) * 100) : 0,
