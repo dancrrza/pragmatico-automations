@@ -26,7 +26,7 @@ on:
         required: false
         default: ''
       session_title:
-        description: 'Session title'
+        description: 'Session title (used in the video URL)'
         required: true
       session_date:
         description: 'Session date (YYYY-MM-DD)'
@@ -34,6 +34,10 @@ on:
       meeting_id:
         description: 'Zoom Meeting ID'
         required: true
+      host:
+        description: 'Host identifier (michael or alicia)'
+        required: false
+        default: 'michael'
 
 jobs:
   merge:
@@ -71,74 +75,32 @@ jobs:
 
           if [ -n "$T1" ] && [ -n "$T2" ] && [ -n "$BOT1_START" ]; then
             echo "=== SMART MERGE MODE ==="
-            echo "Architecture: [Bot1:intro] + [Bot1:BR1] + [Bot2:BR2] + [Bot1:closing]"
-
-            # Convert to epoch seconds
             bot1_epoch=$(date -d "$BOT1_START" +%s)
             t1_epoch=$(date -d "$T1" +%s)
             t2_epoch=$(date -d "$T2" +%s)
-
-            # Cut points for Bot 1 (seconds from recording start)
             intro_end=$((t1_epoch - bot1_epoch))
             br1_end=$((t2_epoch - bot1_epoch))
-
-            echo "Bot 1 recording started: $BOT1_START"
-            echo "Breakouts opened (T1):   $T1"
-            echo "Breakouts closed (T2):   $T2"
-            echo "Intro duration:          ${intro_end}s"
-            echo "BR1 segment:             ${intro_end}s → ${br1_end}s"
-            echo "Closing starts at:       ${br1_end}s"
-
-            # Validate
-            if [ "$intro_end" -le 0 ]; then
-              echo "WARNING: intro_end=$intro_end — T1 is before Bot 1 start. Setting to 0."
-              intro_end=0
-            fi
-
-            # Segment: Intro (Bot 1, 0 → T1)
-            if [ "$intro_end" -gt 0 ]; then
-              ffmpeg -i bot1.mp4 -t $intro_end -c copy intro.mp4
-              echo "✅ Intro: ${intro_end}s"
-            fi
-
-            # Segment: BR1 (Bot 1, T1 → T2)
+            if [ "$intro_end" -le 0 ]; then intro_end=0; fi
+            [ "$intro_end" -gt 0 ] && ffmpeg -i bot1.mp4 -t $intro_end -c copy intro.mp4
             ffmpeg -i bot1.mp4 -ss $intro_end -to $br1_end -c copy br1.mp4
-            echo "✅ BR1: ${intro_end}s → ${br1_end}s"
-
-            # Segment: BR2 (Bot 2, T1 → T2) — only if Bot 2 exists
             if [ -f bot2.mp4 ] && [ -n "$BOT2_START" ]; then
               bot2_epoch=$(date -d "$BOT2_START" +%s)
               br2_start=$((t1_epoch - bot2_epoch))
               br2_end=$((t2_epoch - bot2_epoch))
-              if [ "$br2_start" -lt 0 ]; then br2_start=0; fi
+              [ "$br2_start" -lt 0 ] && br2_start=0
               ffmpeg -i bot2.mp4 -ss $br2_start -to $br2_end -c copy br2.mp4
-              echo "✅ BR2: ${br2_start}s → ${br2_end}s"
-            else
-              echo "No Bot 2 — skipping BR2 segment."
             fi
-
-            # Segment: Closing (Bot 1, T2 → end)
             ffmpeg -i bot1.mp4 -ss $br1_end -c copy closing.mp4
-            echo "✅ Closing: from ${br1_end}s to end"
-
-            # Build file list in order
             > filelist.txt
-            [ -f intro.mp4   ] && echo "file 'intro.mp4'"    >> filelist.txt
-            [ -f br1.mp4     ] && echo "file 'br1.mp4'"      >> filelist.txt
-            [ -f br2.mp4     ] && echo "file 'br2.mp4'"      >> filelist.txt
-            [ -f closing.mp4 ] && echo "file 'closing.mp4'"  >> filelist.txt
-
-            echo "=== Final merge order ==="
-            cat filelist.txt
-
+            [ -f intro.mp4   ] && echo "file 'intro.mp4'"   >> filelist.txt
+            [ -f br1.mp4     ] && echo "file 'br1.mp4'"     >> filelist.txt
+            [ -f br2.mp4     ] && echo "file 'br2.mp4'"     >> filelist.txt
+            [ -f closing.mp4 ] && echo "file 'closing.mp4'" >> filelist.txt
             ffmpeg -f concat -safe 0 -i filelist.txt -c copy merged.mp4
-
           else
-            echo "=== SIMPLE MODE (no breakout timestamps) ==="
-            echo "Using Bot 1 recording as-is."
+            echo "=== SIMPLE MODE ==="
             cp bot1.mp4 merged.mp4
           fi
-
           echo "Final video: $(du -sh merged.mp4 | cut -f1)"
 
       - name: Upload to GitHub Release
@@ -147,37 +109,46 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           DATE="${{ github.event.inputs.session_date }}"
-          MID="${{ github.event.inputs.meeting_id }}"
           TITLE="${{ github.event.inputs.session_title }}"
-          BOT1_START="${{ github.event.inputs.bot1_start_time }}"
-          TIME=$(date -d "$BOT1_START" +"%H%M" 2>/dev/null || echo "$GITHUB_RUN_NUMBER")
-          FILENAME="session-${DATE}-${TIME}-${MID}.mp4"
-          TAG="session-${DATE}-${TIME}-${MID}"
+          MID="${{ github.event.inputs.meeting_id }}"
+
+          # Sanitize title: lowercase, non-alphanumeric → hyphen, trim hyphens
+          SLUG=$(echo "$TITLE" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | sed 's/^-*//;s/-*$//')
+          [ -z "$SLUG" ] && SLUG="session"
+
+          TAG="${SLUG}-${DATE}"
+          FILENAME="${TAG}.mp4"
 
           mv merged.mp4 "${FILENAME}"
           gh release create "$TAG" \
-            --title "Session: ${TITLE} (${DATE})" \
-            --notes "Zoom Meeting ID: ${MID} | Segments: intro + BR1 + BR2 + closing" \
+            --title "${TITLE} (${DATE})" \
+            --notes "Zoom Meeting ID: ${MID}" \
             "${FILENAME}" \
             --repo ${{ github.repository }}
 
           VIDEO_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${FILENAME}"
-
           echo "video_url=$VIDEO_URL" >> $GITHUB_OUTPUT
-          echo "=== Video published ==="
-          echo "$VIDEO_URL"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "=== Video published: $VIDEO_URL ==="
 
       - name: Upload to Fireflies for transcript
         continue-on-error: true
         env:
-          FIREFLIES_API_KEY: ${{ secrets.FIREFLIES_API_KEY }}
+          FIREFLIES_API_KEY_MICHAEL: ${{ secrets.FIREFLIES_API_KEY_MICHAEL }}
+          FIREFLIES_API_KEY_ALICIA: ${{ secrets.FIREFLIES_API_KEY_ALICIA }}
         run: |
+          HOST="${{ github.event.inputs.host }}"
+          if [ "$HOST" = "alicia" ]; then
+            KEY="$FIREFLIES_API_KEY_ALICIA"
+          else
+            KEY="$FIREFLIES_API_KEY_MICHAEL"
+          fi
           VIDEO_URL="${{ steps.upload_release.outputs.video_url }}"
           TITLE="${{ github.event.inputs.session_title }} — ${{ github.event.inputs.session_date }}"
-          echo "Sending to Fireflies for transcript (NOT for sharing)..."
+          echo "Sending to Fireflies ($HOST)..."
           curl -s -X POST https://api.fireflies.ai/graphql \
             -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $FIREFLIES_API_KEY" \
+            -H "Authorization: Bearer $KEY" \
             -d "{\"query\": \"mutation { uploadAudio(input: { url: \\\"$VIDEO_URL\\\", title: \\\"$TITLE\\\", save_video: true }) { success } }\"}"
 
       - name: Notify n8n with final video URL
