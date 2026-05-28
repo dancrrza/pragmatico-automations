@@ -19,45 +19,19 @@
     .header p  { font-size: 14px; color: #888; margin-top: 4px; }
     video { width: 100%; border-radius: 8px; background: #000; display: block; }
     .footer { margin-top: 12px; font-size: 12px; color: #555; text-align: center; }
-    .fallback {
-      background: #111; border: 1px solid #333;
-      border-radius: 8px; padding: 32px; text-align: center;
-    }
+    .fallback { background: #111; border: 1px solid #333; border-radius: 8px; padding: 32px; text-align: center; }
     .fallback p { color: #aaa; margin-bottom: 20px; font-size: 15px; }
-    .btn {
-      display: inline-block; background: #fff; color: #000;
-      padding: 12px 28px; border-radius: 6px;
-      text-decoration: none; font-weight: 600; font-size: 15px;
-    }
+    .btn { display: inline-block; background: #fff; color: #000; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 15px; }
     .btn:hover { background: #ddd; }
-    #gate {
-      min-height: 100vh; width: 100%;
-      display: flex; align-items: center; justify-content: center;
-      padding: 24px;
-    }
-    .gate-box {
-      background: #1a1a1a; border: 1px solid #2a2a2a;
-      border-radius: 12px; padding: 48px 40px;
-      max-width: 440px; width: 100%; text-align: center;
-    }
+    #gate { min-height: 100vh; width: 100%; display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .gate-box { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px; padding: 48px 40px; max-width: 440px; width: 100%; text-align: center; }
     .gate-box h2 { font-size: 20px; font-weight: 600; margin-bottom: 8px; }
     .gate-session { font-size: 14px; color: #888; margin-bottom: 32px; }
     .gate-box label { display: block; text-align: left; font-size: 13px; color: #aaa; margin-bottom: 8px; }
-    .gate-box input[type="email"] {
-      width: 100%; padding: 12px 16px;
-      background: #111; border: 1px solid #333;
-      border-radius: 8px; color: #fff; font-size: 15px;
-      margin-bottom: 16px; outline: none;
-    }
-    .gate-box input[type="email"]:focus { border-color: #666; }
-    .gate-box input[type="email"]::placeholder { color: #555; }
-    .gate-btn {
-      width: 100%; padding: 13px;
-      background: #fff; color: #000;
-      border: none; border-radius: 8px;
-      font-size: 15px; font-weight: 600;
-      cursor: pointer; transition: background 0.15s;
-    }
+    .gate-box input { width: 100%; padding: 12px 16px; background: #111; border: 1px solid #333; border-radius: 8px; color: #fff; font-size: 15px; margin-bottom: 16px; outline: none; }
+    .gate-box input:focus { border-color: #666; }
+    .gate-box input::placeholder { color: #555; }
+    .gate-btn { width: 100%; padding: 13px; background: #fff; color: #000; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
     .gate-btn:hover { background: #e0e0e0; }
     .gate-error { color: #ff6b6b; font-size: 13px; margin-top: 12px; }
     .gate-note { font-size: 12px; color: #555; margin-top: 20px; }
@@ -65,12 +39,13 @@
   </style>
 </head>
 <body>
-
   <div id="gate">
     <div class="gate-box">
       <h2>Access Session Recording</h2>
       <p class="gate-session" id="gate-session-info">Loading...</p>
-      <label for="email-input">Enter your work email to continue</label>
+      <label for="name-input">First name</label>
+      <input type="text" id="name-input" placeholder="Your first name" autocomplete="given-name">
+      <label for="email-input">Work email</label>
       <input type="email" id="email-input" placeholder="you@company.com" autocomplete="email">
       <button class="gate-btn" id="watch-btn">Watch Recording &rarr;</button>
       <p class="gate-error" id="gate-error"></p>
@@ -95,13 +70,13 @@
     const sessionId   = params.get('s') || '';
     const sessionDate = params.get('d') || '';
     const title       = params.get('t') || 'Session Recording';
-
     const N8N_WEBHOOK = 'https://pragmatico.app.n8n.cloud/webhook/video-watch';
 
     const decodedTitle = decodeURIComponent(title);
     document.getElementById('gate-session-info').textContent =
       decodedTitle + (sessionDate ? ' — ' + decodeURIComponent(sessionDate) : '');
 
+    const nameInput  = document.getElementById('name-input');
     const emailInput = document.getElementById('email-input');
     const watchBtn   = document.getElementById('watch-btn');
     const gateError  = document.getElementById('gate-error');
@@ -109,16 +84,17 @@
     function isValidEmail(e) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e); }
 
     watchBtn.addEventListener('click', function() {
+      const name  = nameInput.value.trim();
       const email = emailInput.value.trim();
+      if (!name)  { gateError.textContent = 'Please enter your first name.'; return; }
       if (!email) { gateError.textContent = 'Please enter your email.'; return; }
       if (!isValidEmail(email)) { gateError.textContent = 'Please enter a valid email address.'; return; }
       if (!videoUrl) { gateError.textContent = 'Invalid session link. Contact your administrator.'; return; }
-      launchPlayer(email);
+      launchPlayer(name, email);
     });
 
-    emailInput.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter') watchBtn.click();
-    });
+    nameInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') emailInput.focus(); });
+    emailInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') watchBtn.click(); });
 
     function sendPing(payload) {
       fetch(N8N_WEBHOOK, {
@@ -130,7 +106,7 @@
       }).catch(function() {});
     }
 
-    function launchPlayer(email) {
+    function launchPlayer(name, email) {
       document.getElementById('gate').style.display = 'none';
       document.getElementById('player-section').style.display = 'block';
       document.getElementById('session-title').textContent = decodedTitle;
@@ -138,45 +114,32 @@
 
       const wrap = document.getElementById('player-wrap');
       const decodedUrl = decodeURIComponent(videoUrl);
-      let started = false;
-      let maxReached = 0;
-      let canPlay = false;
+      let started = false, canPlay = false;
 
       function ping(event) {
         const vid = document.getElementById('main-video');
         const currentTime = vid ? vid.currentTime : 0;
         const duration    = (vid && vid.duration) ? vid.duration : 0;
-        const pct = duration ? Math.round((currentTime / duration) * 100) : 0;
-        if (currentTime > maxReached) maxReached = currentTime;
         sendPing({
+          name:        name,
           email:       email.toLowerCase().trim(),
           sessionId:   sessionId,
           sessionDate: decodeURIComponent(sessionDate),
           event:       event,
-          pctWatched:  pct,
-          maxReached:  Math.round(maxReached)
+          watchedAt:   new Date().toISOString(),
+          pctWatched:  duration ? Math.round((currentTime / duration) * 100) : 0
         });
       }
 
       const vid = document.createElement('video');
-      vid.controls = true;
-      vid.id = 'main-video';
-      vid.src = decodedUrl;
+      vid.controls = true; vid.id = 'main-video'; vid.src = decodedUrl;
       wrap.appendChild(vid);
 
       vid.addEventListener('canplay', function() { canPlay = true; });
-
       vid.addEventListener('play', function() {
-        if (!started) {
-          started = true;
-          ping('started');
-        }
+        if (!started) { started = true; ping('started'); }
       });
-
-      vid.addEventListener('ended', function() {
-        ping('completed');
-      });
-
+      vid.addEventListener('ended', function() { ping('completed'); });
       vid.addEventListener('error', showFallback);
       setTimeout(function() { if (!canPlay) showFallback(); }, 5000);
 
