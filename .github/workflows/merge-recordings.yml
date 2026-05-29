@@ -35,7 +35,7 @@ on:
         description: 'Zoom Meeting ID'
         required: true
       host:
-        description: 'Host identifier (michael or alicia)'
+        description: 'Host identifier (michael, alicia, or daniela)'
         required: false
         default: 'michael'
 
@@ -136,10 +136,13 @@ jobs:
         env:
           FIREFLIES_API_KEY_MICHAEL: ${{ secrets.FIREFLIES_API_KEY_MICHAEL }}
           FIREFLIES_API_KEY_ALICIA: ${{ secrets.FIREFLIES_API_KEY_ALICIA }}
+          FIREFLIES_API_KEY: ${{ secrets.FIREFLIES_API_KEY }}
         run: |
           HOST="${{ github.event.inputs.host }}"
           if [ "$HOST" = "alicia" ]; then
             KEY="$FIREFLIES_API_KEY_ALICIA"
+          elif [ "$HOST" = "daniela" ]; then
+            KEY="$FIREFLIES_API_KEY"
           else
             KEY="$FIREFLIES_API_KEY_MICHAEL"
           fi
