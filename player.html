@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Pragmatico — Session Recording</title>
+  <title>Session Recording</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f0f; color: #fff; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; }
@@ -54,33 +54,33 @@
         <p id="session-meta"></p>
       </div>
       <div id="player-wrap"></div>
-      <div class="footer">Pragmatico &mdash; For internal use only</div>
+      <div class="footer">For internal use only</div>
     </div>
   </div>
 
   <script>
-    const params      = new URLSearchParams(window.location.search);
-    const videoUrl    = params.get('v') || '';
-    const sessionId   = params.get('s') || '';
-    const sessionDate = params.get('d') || '';
-    const sheetId     = params.get('sid') || '';
-    const title       = params.get('t') || 'Session Recording';
-    const N8N_WEBHOOK = 'https://pragmatico.app.n8n.cloud/webhook/video-watch';
+    var params      = new URLSearchParams(window.location.search);
+    var videoUrl    = params.get('v') || '';
+    var sessionId   = params.get('s') || '';
+    var sessionDate = params.get('d') || '';
+    var sheetId     = params.get('sid') || '';
+    var title       = params.get('t') || 'Session Recording';
+    var N8N_WEBHOOK = 'https://pragmatico.app.n8n.cloud/webhook/video-watch';
 
-    const decodedTitle = decodeURIComponent(title);
+    var decodedTitle = decodeURIComponent(title);
     document.getElementById('gate-session-info').textContent =
       decodedTitle + (sessionDate ? ' — ' + decodeURIComponent(sessionDate) : '');
 
-    const nameInput  = document.getElementById('name-input');
-    const emailInput = document.getElementById('email-input');
-    const watchBtn   = document.getElementById('watch-btn');
-    const gateError  = document.getElementById('gate-error');
+    var nameInput  = document.getElementById('name-input');
+    var emailInput = document.getElementById('email-input');
+    var watchBtn   = document.getElementById('watch-btn');
+    var gateError  = document.getElementById('gate-error');
 
     function isValidEmail(e) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e); }
 
     watchBtn.addEventListener('click', function() {
-      const name  = nameInput.value.trim();
-      const email = emailInput.value.trim();
+      var name  = nameInput.value.trim();
+      var email = emailInput.value.trim();
       if (!name)  { gateError.textContent = 'Please enter your first name.'; return; }
       if (!email) { gateError.textContent = 'Please enter your email.'; return; }
       if (!isValidEmail(email)) { gateError.textContent = 'Please enter a valid email address.'; return; }
@@ -107,31 +107,31 @@
       document.getElementById('session-title').textContent = decodedTitle;
       if (sessionDate) document.getElementById('session-meta').textContent = decodeURIComponent(sessionDate);
 
-      const wrap = document.getElementById('player-wrap');
-      const decodedUrl = decodeURIComponent(videoUrl);
-      let started = false, canPlay = false;
-      let maxReached = 0, lastProgressPing = 0;
-      const PROGRESS_INTERVAL = 60; // ping every 60s of playback
+      var wrap = document.getElementById('player-wrap');
+      var decodedUrl = decodeURIComponent(videoUrl);
+      var started = false, canPlay = false;
+      var maxReached = 0, lastProgressPing = 0;
+      var PROGRESS_INTERVAL = 60;
 
       function buildPayload(event) {
-        const vid = document.getElementById('main-video');
-        const currentTime = vid ? vid.currentTime : 0;
-        const duration    = (vid && vid.duration) ? vid.duration : 0;
+        var vid = document.getElementById('main-video');
+        var currentTime = vid ? vid.currentTime : 0;
+        var duration    = (vid && vid.duration) ? vid.duration : 0;
         if (currentTime > maxReached) maxReached = currentTime;
         return {
-          name:            name,
-          email:           email.toLowerCase().trim(),
-          sessionId:       sessionId,
-          sessionDate:     decodeURIComponent(sessionDate),
-          sheetId:         sheetId,
-          event:           event,
-          watchedAt:       new Date().toISOString(),
-          pctWatched:      duration ? Math.round((maxReached / duration) * 100) : 0,
-          secondsWatched:  Math.round(maxReached)
+          name:           name,
+          email:          email.toLowerCase().trim(),
+          sessionId:      sessionId,
+          sessionDate:    decodeURIComponent(sessionDate),
+          sheetId:        sheetId,
+          event:          event,
+          watchedAt:      new Date().toISOString(),
+          pctWatched:     duration ? Math.round((maxReached / duration) * 100) : 0,
+          secondsWatched: Math.round(maxReached)
         };
       }
 
-      const vid = document.createElement('video');
+      var vid = document.createElement('video');
       vid.controls = true; vid.id = 'main-video'; vid.src = decodedUrl;
       wrap.appendChild(vid);
 
@@ -140,7 +140,6 @@
       vid.addEventListener('play', function() {
         if (!started) {
           started = true;
-          // started event includes watchedAt — used as "first watched" timestamp
           sendPing(buildPayload('started'));
         }
       });
@@ -156,7 +155,6 @@
         sendPing(buildPayload('completed'));
       });
 
-      // Final ping when tab is hidden or closed
       document.addEventListener('visibilitychange', function() {
         if (document.hidden && started) {
           sendPing(buildPayload('left'));
