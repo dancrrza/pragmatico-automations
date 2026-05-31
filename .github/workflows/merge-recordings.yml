@@ -47,7 +47,10 @@ jobs:
 
     steps:
       - name: Install FFmpeg
-        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends ffmpeg
+        run: |
+          curl -L https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz \
+            | tar xJ --wildcards --strip-components=1 -C /usr/local/bin '*/ffmpeg' '*/ffprobe'
+          ffmpeg -version
 
       - name: Download Bot 1 recording
         run: |
