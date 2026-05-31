@@ -138,7 +138,7 @@ jobs:
           FIREFLIES_API_KEY_ALYSHA: ${{ secrets.FIREFLIES_API_KEY_ALYSHA }}
           FIREFLIES_API_KEY: ${{ secrets.FIREFLIES_API_KEY }}
         run: |
-          HOST="${{ github.event.inputs.host }}"
+          HOST=$(echo "${{ github.event.inputs.host }}" | tr '[:upper:]' '[:lower:]')
           if [ "$HOST" = "alysha" ]; then
             KEY="$FIREFLIES_API_KEY_ALYSHA"
           elif [ "$HOST" = "daniela" ]; then
